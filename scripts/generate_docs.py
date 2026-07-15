@@ -16,7 +16,7 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 client = OpenAI(
     api_key=os.environ["LLAMA_API_KEY"],
-    base_url="https://api.llama.com/v1",
+    base_url="https://api.groq.com/openai/v1",
 )
 
 
@@ -72,7 +72,7 @@ Begin with "Dear Hiring Manager," and end with "Sincerely,\n[Name]"."""
 def _call_claude(prompt: str, max_tokens: int = 1800) -> str:
     try:
         message = client.chat.completions.create(
-            model="Llama-4-Maverick-17B-128E-Instruct-FP8",
+            model="llama-3.3-70b-versatile",
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
