@@ -179,16 +179,22 @@ SEARCH_QUERIES = [
     "ML Platform Engineer Staff",
 ]
 
-# Locations to search (jobspy format)
+# Locations to search (jobspy format) — India cities listed first as priority
 SEARCH_LOCATIONS = [
-    "United States",
+    "Hyderabad, India",
+    "Bangalore, India",
+    "Pune, India",
+    "Mumbai, India",
+    "Delhi, India",
     "Remote",
+    "United States",
     "London, United Kingdom",
     "Singapore",
     "Dubai, United Arab Emirates",
 ]
 
 # Locations considered "international" — visa filter is applied to these
+# India is intentionally excluded (domestic, no visa needed)
 INTERNATIONAL_LOCATIONS = {"london", "united kingdom", "uk", "singapore", "dubai", "uae", "united arab emirates"}
 
 # Keywords that indicate visa sponsorship is available (case-insensitive)
