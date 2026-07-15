@@ -30,12 +30,16 @@ from config        import MAX_JOBS_IN_EMAIL
 
 # ─── LOGGING SETUP ───────────────────────────────────────────────────────────
 
+# Output dir must exist before FileHandler opens the log file
+OUTPUT_DIR = Path(__file__).parent.parent / "output"
+OUTPUT_DIR.mkdir(exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("output/run.log", mode="a"),
+        logging.FileHandler(OUTPUT_DIR / "run.log", mode="a"),
     ],
 )
 logger = logging.getLogger(__name__)
@@ -54,9 +58,8 @@ def load_resume() -> str:
 
 
 def save_results(jobs: list[dict]) -> None:
-    os.makedirs("output", exist_ok=True)
     date_str = datetime.now().strftime("%Y-%m-%d")
-    out_path = f"output/results_{date_str}.json"
+    out_path = OUTPUT_DIR / f"results_{date_str}.json"
     with open(out_path, "w") as f:
         # Remove very long fields to keep the JSON readable
         slim = []
