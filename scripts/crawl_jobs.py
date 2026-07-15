@@ -1,11 +1,15 @@
 """
 crawl_jobs.py
 Fetches jobs from:
-  1. python-jobspy  → LinkedIn, Indeed, Glassdoor, ZipRecruiter
-  2. Greenhouse ATS → direct public API
-  3. Lever ATS      → direct public API
-  4. RemoteOK       → public JSON API
-  5. We Work Remotely → RSS feed
+  1. python-jobspy   → LinkedIn, Indeed
+  2. Greenhouse ATS  → direct public API
+  3. Lever ATS       → direct public API
+  4. Ashby ATS       → direct public API
+  5. Workable ATS    → direct public API
+  6. RemoteOK        → public JSON API
+  7. We Work Remotely → RSS feed
+  8. Remotive        → public JSON API
+  9. Jobicy          → RSS feed
 """
 
 import os
@@ -33,8 +37,12 @@ from config import (
     REMOTE_ONLY,
     GREENHOUSE_COMPANIES,
     LEVER_COMPANIES,
+    ASHBY_COMPANIES,
+    WORKABLE_COMPANIES,
     REMOTEOK_TAGS,
     WWR_RSS_URL,
+    REMOTIVE_CATEGORIES,
+    JOBICY_RSS_URL,
     TARGET_ROLE_KEYWORDS,
 )
 
@@ -92,22 +100,25 @@ def crawl_jobspy() -> list[dict]:
         return []
 
     results = []
-    sites = ["linkedin", "indeed", "glassdoor", "zip_recruiter"]
+    sites = ["linkedin", "indeed"]  # glassdoor/zip_recruiter block cloud IPs
 
     for query in SEARCH_QUERIES:
         for location in SEARCH_LOCATIONS:
             try:
                 logger.info(f"[jobspy] query='{query}' location='{location}'")
-                df = scrape_jobs(
+                is_remote_search = (location == "Remote" or REMOTE_ONLY)
+                scrape_kwargs = dict(
                     site_name=sites,
                     search_term=query,
-                    location=location if location != "Remote" else None,
-                    is_remote=True if location == "Remote" or REMOTE_ONLY else None,
+                    location=location if not is_remote_search else None,
                     results_wanted=RESULTS_PER_QUERY,
-                    hours_old=26,          # slightly over 24h to avoid edge-case misses
+                    hours_old=26,
                     country_indeed="USA",
                     linkedin_fetch_description=True,
                 )
+                if is_remote_search:
+                    scrape_kwargs["is_remote"] = True   # only pass when True; omit for non-remote
+                df = scrape_jobs(**scrape_kwargs)
 
                 for _, row in df.iterrows():
                     title = str(row.get("title", ""))
@@ -138,7 +149,8 @@ def crawl_jobspy() -> list[dict]:
 
 def crawl_greenhouse() -> list[dict]:
     results = []
-    base = "https://boards.greenhouse.io/api/v1/boards/{slug}/jobs"
+    # Greenhouse moved their public API to boards-api subdomain
+    base = "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
 
     for slug in GREENHOUSE_COMPANIES:
         try:
@@ -154,15 +166,7 @@ def crawl_greenhouse() -> list[dict]:
                 if not _title_matches(title):
                     continue
 
-                # Fetch full description
-                desc = ""
-                detail_url = f"https://boards.greenhouse.io/api/v1/boards/{slug}/jobs/{job.get('id')}"
-                try:
-                    detail = requests.get(detail_url, timeout=10).json()
-                    desc = re.sub(r"<[^>]+>", " ", detail.get("content", ""))
-                except Exception:
-                    pass
-
+                desc = re.sub(r"<[^>]+>", " ", job.get("content", ""))
                 location = job.get("location", {}).get("name", "")
                 apply_url = job.get("absolute_url", f"https://boards.greenhouse.io/{slug}/jobs/{job.get('id')}")
 
@@ -174,7 +178,8 @@ def crawl_greenhouse() -> list[dict]:
                     description=desc,
                     source="greenhouse",
                 ))
-                time.sleep(0.3)
+
+            time.sleep(0.3)
 
         except Exception as e:
             logger.warning(f"[greenhouse] {slug}: {e}")
@@ -307,6 +312,175 @@ def crawl_weworkremotely() -> list[dict]:
     return results
 
 
+# ─── SOURCE 4: Ashby ATS ─────────────────────────────────────────────────────
+
+def crawl_ashby() -> list[dict]:
+    results = []
+    url = "https://api.ashbyhq.com/posting-public/job-posting/list"
+    headers = {"Content-Type": "application/json"}
+
+    for slug in ASHBY_COMPANIES:
+        try:
+            resp = requests.post(
+                url,
+                json={"organizationHostedJobsPageName": slug},
+                headers=headers,
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                logger.warning(f"[ashby] {slug}: HTTP {resp.status_code}")
+                continue
+
+            jobs = resp.json().get("results", [])
+            for job in jobs:
+                title = job.get("title", "")
+                if not _title_matches(title):
+                    continue
+
+                location = job.get("locationName", "") or job.get("isRemote") and "Remote" or ""
+                apply_url = job.get("jobUrl", f"https://jobs.ashbyhq.com/{slug}/{job.get('id')}")
+                desc = re.sub(r"<[^>]+>", " ", job.get("descriptionSafe", "") or "")
+
+                results.append(_normalize_job(
+                    title=title,
+                    company=job.get("organizationName", slug.title()),
+                    location=location,
+                    url=apply_url,
+                    description=desc,
+                    source="ashby",
+                    is_remote=bool(job.get("isRemote")),
+                ))
+            time.sleep(0.3)
+
+        except Exception as e:
+            logger.warning(f"[ashby] {slug}: {e}")
+
+    logger.info(f"[ashby] {len(results)} jobs collected")
+    return results
+
+
+# ─── SOURCE 5: Workable ATS ──────────────────────────────────────────────────
+
+def crawl_workable() -> list[dict]:
+    results = []
+
+    for slug in WORKABLE_COMPANIES:
+        try:
+            url = f"https://apply.workable.com/api/v1/widget/accounts/{slug}/jobs"
+            resp = requests.get(url, timeout=15)
+            if resp.status_code != 200:
+                logger.warning(f"[workable] {slug}: HTTP {resp.status_code}")
+                continue
+
+            jobs = resp.json().get("results", [])
+            for job in jobs:
+                title = job.get("title", "")
+                if not _title_matches(title):
+                    continue
+
+                location_parts = [
+                    job.get("city", ""),
+                    job.get("state", ""),
+                    job.get("country", ""),
+                ]
+                location = ", ".join(p for p in location_parts if p) or "Remote"
+                apply_url = f"https://apply.workable.com/{slug}/j/{job.get('shortcode', '')}"
+
+                results.append(_normalize_job(
+                    title=title,
+                    company=job.get("company_name", slug.title()),
+                    location=location,
+                    url=apply_url,
+                    description=job.get("description", ""),
+                    source="workable",
+                    is_remote=job.get("remote", False),
+                ))
+            time.sleep(0.3)
+
+        except Exception as e:
+            logger.warning(f"[workable] {slug}: {e}")
+
+    logger.info(f"[workable] {len(results)} jobs collected")
+    return results
+
+
+# ─── SOURCE 8: Remotive ──────────────────────────────────────────────────────
+
+def crawl_remotive() -> list[dict]:
+    results = []
+    headers = {"User-Agent": "JobCrawler/1.0"}
+
+    for category in REMOTIVE_CATEGORIES:
+        try:
+            url = f"https://remotive.com/api/remote-jobs?category={category}&limit=50"
+            resp = requests.get(url, headers=headers, timeout=15)
+            if resp.status_code != 200:
+                continue
+
+            jobs = resp.json().get("jobs", [])
+            for job in jobs:
+                title = job.get("title", "")
+                if not _title_matches(title):
+                    continue
+
+                desc = re.sub(r"<[^>]+>", " ", job.get("description", ""))
+                results.append(_normalize_job(
+                    title=title,
+                    company=job.get("company_name", ""),
+                    location="Remote",
+                    url=job.get("url", ""),
+                    description=desc,
+                    source="remotive",
+                    date_posted=job.get("publication_date", "")[:10],
+                    is_remote=True,
+                ))
+            time.sleep(1)
+
+        except Exception as e:
+            logger.warning(f"[remotive] {category}: {e}")
+
+    logger.info(f"[remotive] {len(results)} jobs collected")
+    return results
+
+
+# ─── SOURCE 9: Jobicy (RSS) ──────────────────────────────────────────────────
+
+def crawl_jobicy() -> list[dict]:
+    results = []
+    try:
+        feed = feedparser.parse(JOBICY_RSS_URL)
+        for entry in feed.entries:
+            title = entry.get("title", "")
+            if not _title_matches(title):
+                continue
+
+            # Jobicy title format: "Company – Job Title"
+            if "–" in title:
+                company, job_title = title.split("–", 1)
+            elif "-" in title:
+                company, job_title = title.split("-", 1)
+            else:
+                company, job_title = "", title
+
+            desc = re.sub(r"<[^>]+>", " ", entry.get("summary", ""))
+            results.append(_normalize_job(
+                title=job_title.strip(),
+                company=company.strip(),
+                location="Remote",
+                url=entry.get("link", ""),
+                description=desc,
+                source="jobicy",
+                date_posted=entry.get("published", "")[:10],
+                is_remote=True,
+            ))
+
+    except Exception as e:
+        logger.warning(f"[jobicy] {e}")
+
+    logger.info(f"[jobicy] {len(results)} jobs collected")
+    return results
+
+
 # ─── DEDUPLICATION ───────────────────────────────────────────────────────────
 
 def deduplicate(jobs: list[dict], seen_ids_file: str = None) -> list[dict]:
@@ -347,8 +521,12 @@ def crawl_all() -> list[dict]:
     all_jobs.extend(crawl_jobspy())
     all_jobs.extend(crawl_greenhouse())
     all_jobs.extend(crawl_lever())
+    all_jobs.extend(crawl_ashby())
+    all_jobs.extend(crawl_workable())
     all_jobs.extend(crawl_remoteok())
     all_jobs.extend(crawl_weworkremotely())
+    all_jobs.extend(crawl_remotive())
+    all_jobs.extend(crawl_jobicy())
 
     logger.info(f"[crawl] total raw jobs: {len(all_jobs)}")
     return deduplicate(all_jobs)
