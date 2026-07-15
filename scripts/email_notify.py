@@ -65,9 +65,7 @@ def _job_card(job: dict, index: int) -> str:
         for g in job.get("gaps", [])
     )
 
-    cl_preview = job.get("cover_letter", "")[:600]
-    if len(job.get("cover_letter", "")) > 600:
-        cl_preview += "…"
+    cl_preview = job.get("cover_letter", "")
 
     notion_link = ""
     if job.get("notion_url"):
