@@ -1,0 +1,82 @@
+name: Daily Job Crawler
+
+on:
+  schedule:
+    # 7:00 AM PST (UTC-8) = 15:00 UTC  |  Mon–Fri only
+    - cron: '0 15 * * 1-5'
+  workflow_dispatch:   # lets you trigger manually from GitHub UI anytime
+
+jobs:
+  crawl:
+    name: Crawl & Match Jobs
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      RESUME_TEXT:          ${{ secrets.RESUME_TEXT }}
+      ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
+      GMAIL_USER:           ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD:   ${{ secrets.GMAIL_APP_PASSWORD }}
+      NOTIFICATION_EMAIL:   ${{ secrets.NOTIFICATION_EMAIL }}
+      NOTION_API_KEY:       ${{ secrets.NOTION_API_KEY }}
+      NOTION_DATABASE_ID:   ${{ secrets.NOTION_DATABASE_ID }}
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Python setup ──────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── Create output directory ───────────────────────────────────────────
+      - name: Create output dir
+        run: mkdir -p output
+
+      # ── Restore seen-IDs cache (avoids re-processing yesterday's jobs) ────
+      - name: Restore seen_ids cache
+        uses: actions/cache@v4
+        with:
+          path: output/seen_ids.txt
+          key: seen-ids-${{ github.run_number }}
+          restore-keys: |
+            seen-ids-
+
+      # ── Main pipeline ─────────────────────────────────────────────────────
+      - name: Run job crawler
+        run: |
+          cd scripts
+          python main.py
+
+      # ── Upload artifacts (results JSON + log) ─────────────────────────────
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: job-results-${{ github.run_number }}
+          path: |
+            output/results_*.json
+            output/run.log
+          retention-days: 30
+
+      # ── Summary in GitHub Actions UI ──────────────────────────────────────
+      - name: Write step summary
+        if: always()
+        run: |
+          echo "## 🎯 Job Crawler Run #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if ls output/results_*.json 1> /dev/null 2>&1; then
+            COUNT=$(python3 -c "import json,glob; f=sorted(glob.glob('output/results_*.json'))[-1]; print(len(json.load(open(f))))")
+            echo "**$COUNT job(s) matched** and sent to your inbox." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No results file generated." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Trigger manually any time from Actions → Daily Job Crawler → Run workflow_" >> $GITHUB_STEP_SUMMARY
