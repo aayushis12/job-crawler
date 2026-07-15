@@ -1,0 +1,16 @@
+# Job crawling
+python-jobspy>=1.1.0
+feedparser>=6.0.10
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+pandas>=2.0.0
+
+# LLM (resume tailoring, scoring, cover letters)
+anthropic>=0.28.0
+
+# Notion tracking
+notion-client>=2.2.0
+
+# Utilities
+python-dotenv>=1.0.0
