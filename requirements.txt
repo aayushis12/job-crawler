@@ -7,7 +7,7 @@ lxml>=4.9.0
 pandas>=2.0.0
 
 # LLM (resume tailoring, scoring, cover letters)
-anthropic>=0.28.0
+openai>=1.30.0
 
 # Notion tracking
 notion-client>=2.2.0
