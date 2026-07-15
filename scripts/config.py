@@ -229,27 +229,50 @@ REMOTE_ONLY = False           # True = only remote jobs across all searches
 # Slug = company identifier in boards.greenhouse.io/api/v1/boards/<slug>/jobs
 
 GREENHOUSE_COMPANIES = [
+    # ── AI / ML focused ──
     "anthropic",
     "openai",
     "cohere",
-    "scaleai",          # Scale AI
+    "scaleai",
     "huggingface",
     "databricks",
-    "togetherai",       # Together AI
-    "runwayml",         # Runway
-    "perplexityai",     # Perplexity
+    "togetherai",
+    "runwayml",
+    "perplexityai",
     "cerebras",
     "groq",
     "snorkelai",
-    "wandb",            # Weights & Biases
+    "wandb",
     "modal",
     "lambdalabs",
-    "allenai",          # Allen Institute for AI
-    "mistral",
+    "allenai",
     "nvidia",
     "salesforce",
     "adobe",
     "servicenow",
+    # ── Good culture / remote-first ──
+    "gitlab",            # fully remote, strong eng culture
+    "zapier",            # remote-first, async culture
+    "buffer",            # transparent, remote-first
+    "stripe",            # strong eng culture
+    "shopify",           # remote-first since 2020
+    "cloudflare",        # strong infra/ML roles
+    "hashicorp",         # remote-first, strong culture
+    "mongodb",           # good remote culture
+    "elastic",           # distributed by design
+    "confluent",         # remote-friendly
+    "grafana",           # open source culture
+    "getsentry",         # Sentry — open source, good culture
+    "dbtlabs",           # dbt Labs — remote-first data company
+    "netlify",           # remote-first
+    "posthog",           # fully remote, open source
+    "browserstack",      # remote-friendly
+    "figma",
+    "notion",
+    "miro",
+    "airtable",
+    "retool",
+    "vercel",
 ]
 
 # ─── LEVER ATS COMPANIES ──────────────────────────────────────────────────────
@@ -260,18 +283,19 @@ LEVER_COMPANIES = [
     "stability",
     "sambanova",
     "anyscale",
-    "covariant",
-    "nuro",
-    "verkada",
-    "figma",
+    "duckduckgo",        # privacy-first, remote-first
+    "remote",            # Remote.com — fully distributed
+    "deel",              # remote work platform
+    "loom",
+    "linear",
+    "replit",
 ]
 
 # ─── ASHBY ATS COMPANIES ──────────────────────────────────────────────────────
-# Slug = company identifier used in their hosted jobs page URL
 
 ASHBY_COMPANIES = [
+    # ── AI / infra ──
     "perplexity",
-    "replit",
     "modal",
     "glean",
     "imbue",
@@ -286,18 +310,43 @@ ASHBY_COMPANIES = [
     "predibase",
     "tenstorrent",
     "etched",
-    "cognition",          # Devin AI
+    "cognition",
     "poolside",
     "aisera",
     "moveworks",
     "typeface",
     "writer",
-    "comet",
-    "brainlid",
     "sierra",
-    "induced",
     "speak",
-    "liner",
+    # ── Good culture / remote-first ──
+    "supabase",          # open source, remote-first
+    "planetscale",       # MySQL-compatible, remote-first
+    "fly",               # Fly.io — strong eng culture
+    "turso",             # remote-first DB company
+    "neon",              # serverless Postgres
+    "railway",           # developer platform
+    "resend",            # email infra, good culture
+    "cal",               # Cal.com — open source
+    "ghost",             # open source publishing
+    "sanity",            # headless CMS, remote-first
+]
+
+# ─── CUSTOM CAREER PAGE COMPANIES ────────────────────────────────────────────
+# Companies that don't use standard ATS — scraped directly
+
+CUSTOM_CAREERS = [
+    {
+        "name": "Automattic",
+        "url": "https://automattic.com/wp-json/wpcom/v2/jobs/",
+        "type": "automattic",
+    },
+    {
+        "name": "Basecamp / 37signals",
+        "url": "https://37signals.com/jobs.json",
+        "type": "json_list",
+        "title_key": "title",
+        "url_key": "url",
+    },
 ]
 
 # ─── WORKABLE ATS COMPANIES ───────────────────────────────────────────────────
