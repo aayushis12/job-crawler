@@ -31,7 +31,7 @@ from config import (
 logger = logging.getLogger(__name__)
 client = OpenAI(
     api_key=os.environ["LLAMA_API_KEY"],
-    base_url="https://api.llama.com/v1",
+    base_url="https://api.groq.com/openai/v1",
 )
 
 
@@ -163,7 +163,7 @@ def score_with_claude(job: dict, resume: str) -> dict:
 
     try:
         message = client.chat.completions.create(
-            model="Llama-4-Maverick-17B-128E-Instruct-FP8",
+            model="llama-3.3-70b-versatile",
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
