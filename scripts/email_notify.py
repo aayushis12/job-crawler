@@ -50,6 +50,11 @@ def _job_card(job: dict, index: int) -> str:
         'border-radius:10px;font-size:11px;margin-left:8px;">Remote</span>'
         if job.get("is_remote") else ""
     )
+    visa_badge = (
+        '<span style="background:#00796B;color:#fff;padding:2px 8px;'
+        'border-radius:10px;font-size:11px;margin-left:8px;">✈️ Visa Sponsored</span>'
+        if job.get("visa_sponsored") else ""
+    )
 
     match_reasons = "".join(
         f'<li style="margin:3px 0;color:#2E7D32;">✅ {r}</li>'
@@ -79,7 +84,7 @@ def _job_card(job: dict, index: int) -> str:
   <div style="margin-bottom:12px;">
     <span style="font-size:13px;color:#757575;">#{index} · {job.get('source','').upper()}</span>
     <div style="margin-top:6px;">
-      {_score_badge(job.get('score', 0))} {tier1_badge} {remote_badge}
+      {_score_badge(job.get('score', 0))} {tier1_badge} {remote_badge} {visa_badge}
     </div>
   </div>
 
