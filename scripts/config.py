@@ -226,25 +226,24 @@ GREENHOUSE_COMPANIES = [
     "anthropic",
     "openai",
     "cohere",
-    "scale",
+    "scaleai",          # Scale AI
     "huggingface",
     "databricks",
-    "together",
-    "runway",
-    "perplexity",
-    "adept",
-    "ai21labs",
-    "allenai",       # Allen Institute for AI
-    "inflection",
-    "mosaic",
+    "togetherai",       # Together AI
+    "runwayml",         # Runway
+    "perplexityai",     # Perplexity
     "cerebras",
     "groq",
-    "lightspeed",
     "snorkelai",
-    "weights-biases",  # Weights & Biases
-    "wandb",
+    "wandb",            # Weights & Biases
     "modal",
     "lambdalabs",
+    "allenai",          # Allen Institute for AI
+    "mistral",
+    "nvidia",
+    "salesforce",
+    "adobe",
+    "servicenow",
 ]
 
 # ─── LEVER ATS COMPANIES ──────────────────────────────────────────────────────
