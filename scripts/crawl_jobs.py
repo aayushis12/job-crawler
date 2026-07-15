@@ -309,9 +309,13 @@ def crawl_weworkremotely() -> list[dict]:
 
 # ─── DEDUPLICATION ───────────────────────────────────────────────────────────
 
-def deduplicate(jobs: list[dict], seen_ids_file: str = "output/seen_ids.txt") -> list[dict]:
+def deduplicate(jobs: list[dict], seen_ids_file: str = None) -> list[dict]:
     """Remove jobs seen in previous runs and jobs duplicated within this batch."""
-    os.makedirs("output", exist_ok=True)
+    from pathlib import Path
+    output_dir = Path(__file__).parent.parent / "output"
+    output_dir.mkdir(exist_ok=True)
+    if seen_ids_file is None:
+        seen_ids_file = output_dir / "seen_ids.txt"
 
     # Load previously seen IDs
     seen = set()
