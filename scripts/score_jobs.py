@@ -2,7 +2,7 @@
 score_jobs.py
 Two-stage scoring pipeline:
   Stage 1: Fast keyword + experience pre-filter (free)
-  Stage 2: Claude 0-100 match scoring (API call per surviving job)
+  Stage 2: Llama 0-100 match scoring (API call per surviving job)
 
 Jobs must score ≥ MIN_MATCH_SCORE (default 85) to make the digest.
 """
@@ -14,7 +14,7 @@ import logging
 import time
 from typing import Optional
 
-import anthropic
+from openai import OpenAI
 
 from config import (
     YEARS_OF_EXPERIENCE,
@@ -27,7 +27,10 @@ from config import (
 )
 
 logger = logging.getLogger(__name__)
-client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+client = OpenAI(
+    api_key=os.environ["LLAMA_API_KEY"],
+    base_url="https://api.llama.com/v1",
+)
 
 
 # ─── STAGE 1: KEYWORD / EXPERIENCE PRE-FILTER ────────────────────────────────
@@ -138,12 +141,12 @@ def score_with_claude(job: dict, resume: str) -> dict:
     )
 
     try:
-        message = client.messages.create(
-            model="claude-opus-4-8",
+        message = client.chat.completions.create(
+            model="Llama-4-Maverick-17B-128E-Instruct-FP8",
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = message.content[0].text.strip()
+        raw = message.choices[0].message.content.strip()
 
         # Strip any accidental markdown fences
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
