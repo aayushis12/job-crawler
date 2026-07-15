@@ -11,10 +11,13 @@ import re
 import time
 import logging
 
-import anthropic
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
-client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+client = OpenAI(
+    api_key=os.environ["LLAMA_API_KEY"],
+    base_url="https://api.llama.com/v1",
+)
 
 
 # ─── PROMPTS ─────────────────────────────────────────────────────────────────
@@ -68,12 +71,12 @@ Begin with "Dear Hiring Manager," and end with "Sincerely,\n[Name]"."""
 
 def _call_claude(prompt: str, max_tokens: int = 1800) -> str:
     try:
-        message = client.messages.create(
-            model="claude-opus-4-8",
+        message = client.chat.completions.create(
+            model="Llama-4-Maverick-17B-128E-Instruct-FP8",
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
-        return message.content[0].text.strip()
+        return message.choices[0].message.content.strip()
     except Exception as e:
         logger.warning(f"[generate] Claude error: {e}")
         return f"[Generation failed: {e}]"
