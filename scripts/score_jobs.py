@@ -24,6 +24,8 @@ from config import (
     MIN_YOE_GENERAL,
     MIN_YOE_TIER1,
     MIN_MATCH_SCORE,
+    INTERNATIONAL_LOCATIONS,
+    VISA_SPONSORSHIP_KEYWORDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,16 @@ def _is_tier1(job: dict) -> bool:
     return any(t1 in company for t1 in TIER_1_AI_COMPANIES)
 
 
+def _is_international(job: dict) -> bool:
+    location = job.get("location", "").lower()
+    return any(intl in location for intl in INTERNATIONAL_LOCATIONS)
+
+
+def _sponsors_visa(job: dict) -> bool:
+    text = (job.get("description", "") + " " + job.get("title", "")).lower()
+    return any(kw in text for kw in VISA_SPONSORSHIP_KEYWORDS)
+
+
 def _required_yoe(job: dict) -> Optional[int]:
     """Try to parse the minimum years of experience stated in the JD."""
     desc = job["description"]
@@ -82,6 +94,14 @@ def keyword_prefilter(jobs: list[dict]) -> list[dict]:
             logger.debug(f"[prefilter] EXCLUDE too junior: {job['title']} @ {job['company']}")
             continue
 
+        # International jobs: skip unless visa sponsorship is mentioned
+        if _is_international(job) and not _sponsors_visa(job):
+            logger.debug(
+                f"[prefilter] EXCLUDE no visa sponsorship: {job['title']} @ {job['company']} "
+                f"({job.get('location','')})"
+            )
+            continue
+
         tier1 = _is_tier1(job)
         min_yoe = MIN_YOE_TIER1 if tier1 else MIN_YOE_GENERAL
         required = _required_yoe(job)
@@ -94,6 +114,7 @@ def keyword_prefilter(jobs: list[dict]) -> list[dict]:
             continue
 
         job["is_tier1"] = tier1
+        job["visa_sponsored"] = _is_international(job) and _sponsors_visa(job)
         kept.append(job)
 
     logger.info(f"[prefilter] {len(jobs)} → {len(kept)} jobs after keyword/experience filter")
