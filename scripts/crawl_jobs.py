@@ -39,6 +39,7 @@ from config import (
     LEVER_COMPANIES,
     ASHBY_COMPANIES,
     WORKABLE_COMPANIES,
+    CUSTOM_CAREERS,
     REMOTEOK_TAGS,
     WWR_RSS_URL,
     REMOTIVE_CATEGORIES,
@@ -443,6 +444,74 @@ def crawl_remotive() -> list[dict]:
     return results
 
 
+# ─── SOURCE 10: Custom career pages (Automattic, Basecamp, etc.) ─────────────
+
+def crawl_custom_careers() -> list[dict]:
+    results = []
+    headers = {"User-Agent": "JobCrawler/1.0"}
+
+    for company in CUSTOM_CAREERS:
+        name = company["name"]
+        url  = company["url"]
+        kind = company["type"]
+
+        try:
+            resp = requests.get(url, headers=headers, timeout=15)
+            if resp.status_code != 200:
+                logger.warning(f"[custom] {name}: HTTP {resp.status_code}")
+                continue
+
+            data = resp.json()
+
+            # ── Automattic WordPress jobs API ──
+            if kind == "automattic":
+                jobs = data if isinstance(data, list) else data.get("jobs", [])
+                for job in jobs:
+                    title = job.get("title", {})
+                    if isinstance(title, dict):
+                        title = title.get("rendered", "")
+                    if not _title_matches(title):
+                        continue
+                    link = job.get("link", job.get("url", "https://automattic.com/work-with-us/"))
+                    desc = re.sub(r"<[^>]+>", " ", str(job.get("content", {}).get("rendered", "")))
+                    results.append(_normalize_job(
+                        title=title,
+                        company="Automattic",
+                        location="Remote",
+                        url=link,
+                        description=desc,
+                        source="custom",
+                        is_remote=True,
+                    ))
+
+            # ── Generic JSON list (e.g. 37signals) ──
+            elif kind == "json_list":
+                jobs = data if isinstance(data, list) else data.get("jobs", [])
+                t_key = company.get("title_key", "title")
+                u_key = company.get("url_key", "url")
+                for job in jobs:
+                    title = job.get(t_key, "")
+                    if not _title_matches(title):
+                        continue
+                    results.append(_normalize_job(
+                        title=title,
+                        company=name,
+                        location=job.get("location", "Remote"),
+                        url=job.get(u_key, ""),
+                        description=job.get("description", ""),
+                        source="custom",
+                        is_remote=True,
+                    ))
+
+            time.sleep(0.5)
+
+        except Exception as e:
+            logger.warning(f"[custom] {name}: {e}")
+
+    logger.info(f"[custom] {len(results)} jobs collected")
+    return results
+
+
 # ─── SOURCE 9: Jobicy (RSS) ──────────────────────────────────────────────────
 
 def crawl_jobicy() -> list[dict]:
@@ -527,6 +596,7 @@ def crawl_all() -> list[dict]:
     all_jobs.extend(crawl_weworkremotely())
     all_jobs.extend(crawl_remotive())
     all_jobs.extend(crawl_jobicy())
+    all_jobs.extend(crawl_custom_careers())
 
     logger.info(f"[crawl] total raw jobs: {len(all_jobs)}")
     return deduplicate(all_jobs)
