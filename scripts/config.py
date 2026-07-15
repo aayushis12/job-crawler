@@ -183,6 +183,37 @@ SEARCH_QUERIES = [
 SEARCH_LOCATIONS = [
     "United States",
     "Remote",
+    "London, United Kingdom",
+    "Singapore",
+    "Dubai, United Arab Emirates",
+]
+
+# Locations considered "international" — visa filter is applied to these
+INTERNATIONAL_LOCATIONS = {"london", "united kingdom", "uk", "singapore", "dubai", "uae", "united arab emirates"}
+
+# Keywords that indicate visa sponsorship is available (case-insensitive)
+VISA_SPONSORSHIP_KEYWORDS = [
+    "visa sponsorship",
+    "sponsor visa",
+    "visa sponsor",
+    "we sponsor",
+    "will sponsor",
+    "sponsorship provided",
+    "relocation assistance",
+    "relocation support",
+    "global mobility",
+    "work authorization",
+    "work permit",
+    "immigration support",
+    "employment pass",       # Singapore EP
+    "ep sponsorship",        # Singapore
+    "s pass",                # Singapore
+    "skilled worker visa",   # UK
+    "tier 2",                # UK legacy
+    "uae visa",              # Dubai
+    "residency visa",        # Dubai
+    "open to relocation",
+    "relocation package",
 ]
 
 RESULTS_PER_QUERY = 30        # per site per query (jobspy)
@@ -223,12 +254,70 @@ LEVER_COMPANIES = [
     "character",
     "stability",
     "sambanova",
+    "anyscale",
+    "covariant",
+    "nuro",
+    "verkada",
+    "figma",
+]
+
+# ─── ASHBY ATS COMPANIES ──────────────────────────────────────────────────────
+# Slug = company identifier used in their hosted jobs page URL
+
+ASHBY_COMPANIES = [
+    "perplexity",
+    "replit",
+    "modal",
+    "glean",
+    "imbue",
+    "descript",
+    "hex",
+    "lancedb",
+    "weaviate",
+    "chroma",
+    "vectara",
+    "contextual",
+    "arcee",
+    "predibase",
+    "tenstorrent",
+    "etched",
+    "cognition",          # Devin AI
+    "poolside",
+    "aisera",
+    "moveworks",
+    "typeface",
+    "writer",
+    "comet",
+    "brainlid",
+    "sierra",
+    "induced",
+    "speak",
+    "liner",
+]
+
+# ─── WORKABLE ATS COMPANIES ───────────────────────────────────────────────────
+# Slug = subdomain in {slug}.workable.com
+
+WORKABLE_COMPANIES = [
+    "openai",
+    "huggingface",
+    "cohere",
+    "clarifai",
+    "speechify",
+    "synthesia",
+    "jasper",
+    "copy-ai",
+    "tome",
+    "dust",
+    "fixie",
 ]
 
 # ─── REMOTE JOB BOARDS ───────────────────────────────────────────────────────
 
 REMOTEOK_TAGS = ["machine-learning", "ai", "llm", "nlp", "search"]
 WWR_RSS_URL = "https://weworkremotely.com/categories/remote-programming-jobs.rss"
+REMOTIVE_CATEGORIES = ["software-dev", "data"]
+JOBICY_RSS_URL = "https://jobicy.com/?feed=job_feed&job_categories=engineering&job_types=full-time&search_keywords=machine+learning"
 
 # ─── NOTION ───────────────────────────────────────────────────────────────────
 # These match the property names in your Notion database (configure to match yours)
