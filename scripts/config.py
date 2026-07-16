@@ -1,7 +1,14 @@
 """
 Job Crawler Configuration
 Customize this file to match your background and preferences.
+
+Most values can be overridden without editing code by setting GitHub Actions Variables
+(Settings → Secrets and variables → Variables) in your fork:
+  SEARCH_QUERIES    comma-separated list of search terms
+  SEARCH_LOCATIONS  comma-separated list of locations
 """
+
+import os
 
 # ─── YOUR PROFILE ────────────────────────────────────────────────────────────
 
@@ -163,24 +170,28 @@ MIN_MATCH_SCORE = 85          # 0–100, jobs below this are dropped
 MAX_JOBS_IN_EMAIL = 10        # cap jobs sent in the daily digest
 
 # ─── JOB SEARCH QUERIES ──────────────────────────────────────────────────────
-# These are the search strings passed to job boards
+# Override via GitHub Actions Variable: SEARCH_QUERIES (comma-separated)
 
-SEARCH_QUERIES = [
+_DEFAULT_SEARCH_QUERIES = [
     "Staff Machine Learning Engineer",
-    "Staff AI Engineer",
     "Applied AI Engineer",
     "LLM Engineer",
-    "Applied Scientist LLM",
     "Search Quality Engineer",
     "Agentic AI Engineer",
     "ML Research Engineer",
-    "Generative AI Engineer",
-    "NLP Engineer Staff",
-    "ML Platform Engineer Staff",
 ]
 
-# Locations to search (jobspy format) — India cities listed first as priority
-SEARCH_LOCATIONS = [
+_queries_env = os.environ.get("SEARCH_QUERIES", "").strip()
+SEARCH_QUERIES = (
+    [q.strip() for q in _queries_env.split(",") if q.strip()]
+    if _queries_env
+    else _DEFAULT_SEARCH_QUERIES
+)
+
+# ─── LOCATIONS ────────────────────────────────────────────────────────────────
+# Override via GitHub Actions Variable: SEARCH_LOCATIONS (comma-separated)
+
+_DEFAULT_LOCATIONS = [
     "Hyderabad, India",
     "Bangalore, India",
     "Pune, India",
@@ -192,6 +203,16 @@ SEARCH_LOCATIONS = [
     "Singapore",
     "Dubai, United Arab Emirates",
 ]
+
+_locations_env = os.environ.get("SEARCH_LOCATIONS", "").strip()
+SEARCH_LOCATIONS = (
+    [l.strip() for l in _locations_env.split(",") if l.strip()]
+    if _locations_env
+    else _DEFAULT_LOCATIONS
+)
+
+# jobspy uses the same location list
+JOBSPY_LOCATIONS = SEARCH_LOCATIONS
 
 # Locations considered "international" — visa filter is applied to these
 # India is intentionally excluded (domestic, no visa needed)
