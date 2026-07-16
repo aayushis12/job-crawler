@@ -158,12 +158,12 @@ def score_with_claude(job: dict, resume: str) -> dict:
         title=job["title"],
         company=job["company"],
         location=job["location"],
-        description=job["description"][:4000],
+        description=job["description"][:2000],   # truncate to stay under TPD limit
     )
 
     try:
         message = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
