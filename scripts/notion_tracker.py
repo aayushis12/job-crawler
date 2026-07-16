@@ -44,19 +44,21 @@ def _already_tracked(client: Client, db_id: str, job: dict) -> bool:
     """Return True if a page with the same title + company already exists."""
     try:
         resp = client.databases.query(
-            database_id=db_id,
-            filter={
-                "and": [
-                    {
-                        "property": NOTION_PROPS["title"],
-                        "title": {"equals": job["title"]},
-                    },
-                    {
-                        "property": NOTION_PROPS["company"],
-                        "rich_text": {"equals": job["company"]},
-                    },
-                ]
-            },
+            **{
+                "database_id": db_id,
+                "filter": {
+                    "and": [
+                        {
+                            "property": NOTION_PROPS["title"],
+                            "title": {"equals": job["title"]},
+                        },
+                        {
+                            "property": NOTION_PROPS["company"],
+                            "rich_text": {"equals": job["company"]},
+                        },
+                    ]
+                },
+            }
         )
         return len(resp.get("results", [])) > 0
     except Exception as e:
