@@ -2,7 +2,7 @@
 score_jobs.py
 Two-stage scoring pipeline:
   Stage 1: Fast keyword + experience pre-filter (free)
-  Stage 2: Llama 0-100 match scoring (API call per surviving job)
+  Stage 2: LLM batch scoring — 5 jobs per API call to stay within Groq free TPD
 
 Jobs must score ≥ MIN_MATCH_SCORE (default 85) to make the digest.
 """
@@ -34,6 +34,8 @@ client = OpenAI(
     base_url="https://api.groq.com/openai/v1",
 )
 
+BATCH_SIZE = 5   # jobs per API call — keeps token cost low on free tier
+
 
 # ─── STAGE 1: KEYWORD / EXPERIENCE PRE-FILTER ────────────────────────────────
 
@@ -43,7 +45,6 @@ def _is_excluded_keyword(job: dict) -> bool:
 
 
 def _is_too_junior(job: dict) -> bool:
-    """Returns True if the JD explicitly asks for too few years of experience."""
     desc = job["description"].lower()
     for pattern in BELOW_LEVEL_PATTERNS:
         if re.search(pattern, desc, re.IGNORECASE):
@@ -67,9 +68,7 @@ def _sponsors_visa(job: dict) -> bool:
 
 
 def _required_yoe(job: dict) -> Optional[int]:
-    """Try to parse the minimum years of experience stated in the JD."""
     desc = job["description"]
-    # patterns like "7+ years", "8-10 years", "minimum 6 years"
     patterns = [
         r"(\d+)\+\s*years?",
         r"(\d+)[-–]\d+\s*years?",
@@ -87,19 +86,10 @@ def keyword_prefilter(jobs: list[dict]) -> list[dict]:
     kept = []
     for job in jobs:
         if _is_excluded_keyword(job):
-            logger.debug(f"[prefilter] EXCLUDE keyword: {job['title']} @ {job['company']}")
             continue
-
         if _is_too_junior(job):
-            logger.debug(f"[prefilter] EXCLUDE too junior: {job['title']} @ {job['company']}")
             continue
-
-        # International jobs: skip unless visa sponsorship is mentioned
         if _is_international(job) and not _sponsors_visa(job):
-            logger.debug(
-                f"[prefilter] EXCLUDE no visa sponsorship: {job['title']} @ {job['company']} "
-                f"({job.get('location','')})"
-            )
             continue
 
         tier1 = _is_tier1(job)
@@ -107,10 +97,6 @@ def keyword_prefilter(jobs: list[dict]) -> list[dict]:
         required = _required_yoe(job)
 
         if required is not None and required < min_yoe:
-            logger.debug(
-                f"[prefilter] EXCLUDE yoe<{min_yoe}: {job['title']} @ {job['company']} "
-                f"(requires {required}y, tier1={tier1})"
-            )
             continue
 
         job["is_tier1"] = tier1
@@ -121,89 +107,94 @@ def keyword_prefilter(jobs: list[dict]) -> list[dict]:
     return kept
 
 
-# ─── STAGE 2: CLAUDE MATCH SCORING ───────────────────────────────────────────
+# ─── STAGE 2: BATCH LLM SCORING ──────────────────────────────────────────────
 
-SCORING_PROMPT = """You are a technical recruiter helping a candidate evaluate job fit.
+BATCH_PROMPT = """You are a technical recruiter scoring job fit for a senior ML/AI engineer.
 
-## Candidate Resume
-{resume}
+## Candidate Summary (10 YOE, focus: LLM, Applied AI, Search, Agentic AI)
+{resume_summary}
 
-## Job Posting
-Title: {title}
-Company: {company}
-Location: {location}
-Description:
-{description}
+## Jobs to Score
+{jobs_block}
 
-## Task
-Score how well this job matches the candidate on a scale of 0–100, where:
-- 90–100: Near-perfect match (title, seniority, stack, domain all align)
-- 80–89:  Strong match (most requirements fit, 1-2 minor gaps)
-- 70–79:  Moderate match (relevant domain but some meaningful gaps)
-- <70:    Weak or mismatched
+## Instructions
+Score each job 0-100:
+- 90-100: near-perfect match (title, seniority, domain, stack all align)
+- 80-89:  strong match (most requirements fit, 1-2 minor gaps)
+- 70-79:  moderate match (relevant domain, some meaningful gaps)
+- <70:    weak or mismatched
 
-Return ONLY valid JSON in exactly this format (no prose, no markdown):
-{{
-  "score": <integer 0-100>,
-  "match_reasons": ["<reason 1>", "<reason 2>", "<reason 3>"],
-  "gaps": ["<gap 1>", "<gap 2>"],
-  "seniority_fit": "<over/under/good fit>",
-  "summary": "<one sentence>"
-}}"""
+Return ONLY a valid JSON array with exactly {n} objects, in order, no prose:
+[
+  {{"job_id": 0, "score": <int>, "match_reasons": ["<r1>", "<r2>"], "gaps": ["<g1>"], "seniority_fit": "<over/under/good>", "summary": "<one sentence>"}},
+  ...
+]"""
 
 
-def score_with_claude(job: dict, resume: str) -> dict:
-    prompt = SCORING_PROMPT.format(
-        resume=resume[:6000],          # guard against huge resumes
-        title=job["title"],
-        company=job["company"],
-        location=job["location"],
-        description=job["description"][:2000],   # truncate to stay under TPD limit
+def _score_batch(jobs: list[dict], resume: str) -> list[dict]:
+    """Score a batch of jobs in a single API call. Returns list of result dicts."""
+    resume_summary = resume[:2000]   # first 2k chars covers summary + recent experience
+
+    jobs_block = "\n\n".join(
+        f"[Job {i}]\nTitle: {j['title']}\nCompany: {j['company']}\n"
+        f"Location: {j['location']}\nDescription: {j['description'][:1000]}"
+        for i, j in enumerate(jobs)
+    )
+
+    prompt = BATCH_PROMPT.format(
+        resume_summary=resume_summary,
+        jobs_block=jobs_block,
+        n=len(jobs),
     )
 
     try:
-        message = client.chat.completions.create(
+        msg = client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            max_tokens=512,
+            max_tokens=256 * len(jobs),   # ~256 tokens per job result
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = message.choices[0].message.content.strip()
-
-        # Strip any accidental markdown fences
+        raw = msg.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
+        results = json.loads(raw)
+        if not isinstance(results, list):
+            raise ValueError("Response is not a JSON array")
+        return results
 
-        result = json.loads(raw)
-        return result
-
-    except json.JSONDecodeError as e:
-        logger.warning(f"[score] JSON parse error for {job['title']} @ {job['company']}: {e}")
-        return {"score": 0, "match_reasons": [], "gaps": [], "seniority_fit": "unknown", "summary": "Parse error"}
     except Exception as e:
-        logger.warning(f"[score] Claude error for {job['title']} @ {job['company']}: {e}")
-        return {"score": 0, "match_reasons": [], "gaps": [], "seniority_fit": "unknown", "summary": str(e)}
+        logger.warning(f"[score] Batch error: {e}")
+        return [
+            {"job_id": i, "score": 0, "match_reasons": [], "gaps": [],
+             "seniority_fit": "unknown", "summary": f"Batch error: {e}"}
+            for i in range(len(jobs))
+        ]
 
 
 def score_all(jobs: list[dict], resume: str) -> list[dict]:
     scored = []
+    total  = len(jobs)
+    batches = [jobs[i:i+BATCH_SIZE] for i in range(0, total, BATCH_SIZE)]
 
-    for i, job in enumerate(jobs):
-        logger.info(f"[score] {i+1}/{len(jobs)} — {job['title']} @ {job['company']}")
-        result = score_with_claude(job, resume)
+    logger.info(f"[score] Scoring {total} jobs in {len(batches)} batches of ≤{BATCH_SIZE}")
 
-        job["score"]         = result.get("score", 0)
-        job["match_reasons"] = result.get("match_reasons", [])
-        job["gaps"]          = result.get("gaps", [])
-        job["seniority_fit"] = result.get("seniority_fit", "")
-        job["score_summary"] = result.get("summary", "")
+    for b_idx, batch in enumerate(batches):
+        logger.info(f"[score] Batch {b_idx+1}/{len(batches)} ({len(batch)} jobs)...")
+        results = _score_batch(batch, resume)
 
-        if job["score"] >= MIN_MATCH_SCORE:
-            scored.append(job)
-            logger.info(f"  ✓ score={job['score']} — KEPT")
-        else:
-            logger.info(f"  ✗ score={job['score']} — DROPPED (< {MIN_MATCH_SCORE})")
+        for job, result in zip(batch, results):
+            job["score"]         = result.get("score", 0)
+            job["match_reasons"] = result.get("match_reasons", [])
+            job["gaps"]          = result.get("gaps", [])
+            job["seniority_fit"] = result.get("seniority_fit", "")
+            job["score_summary"] = result.get("summary", "")
 
-        time.sleep(0.5)    # light rate-limit buffer
+            status = "✓ KEPT" if job["score"] >= MIN_MATCH_SCORE else f"✗ DROPPED (< {MIN_MATCH_SCORE})"
+            logger.info(f"  score={job['score']} {status} — {job['title']} @ {job['company']}")
+
+            if job["score"] >= MIN_MATCH_SCORE:
+                scored.append(job)
+
+        time.sleep(1)   # brief pause between batches
 
     scored.sort(key=lambda j: j["score"], reverse=True)
     logger.info(f"[score] {len(scored)} jobs passed ≥{MIN_MATCH_SCORE} threshold")
