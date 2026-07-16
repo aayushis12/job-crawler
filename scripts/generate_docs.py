@@ -72,7 +72,7 @@ Begin with "Dear Hiring Manager," and end with "Sincerely,\n[Name]"."""
 def _call_claude(prompt: str, max_tokens: int = 1800) -> str:
     try:
         message = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
