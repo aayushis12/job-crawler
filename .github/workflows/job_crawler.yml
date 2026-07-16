@@ -10,9 +10,10 @@ jobs:
   crawl:
     name: Crawl & Match Jobs
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     env:
+      # ── Required secrets (Settings → Secrets and variables → Secrets) ──────
       RESUME_TEXT:          ${{ secrets.RESUME_TEXT }}
       LLAMA_API_KEY:        ${{ secrets.LLAMA_API_KEY }}
       GMAIL_USER:           ${{ secrets.GMAIL_USER }}
@@ -20,6 +21,10 @@ jobs:
       NOTIFICATION_EMAIL:   ${{ secrets.NOTIFICATION_EMAIL }}
       NOTION_API_KEY:       ${{ secrets.NOTION_API_KEY }}
       NOTION_DATABASE_ID:   ${{ secrets.NOTION_DATABASE_ID }}
+      # ── Optional overrides (Settings → Secrets and variables → Variables) ──
+      # Leave blank to use defaults from config.py
+      SEARCH_QUERIES:       ${{ vars.SEARCH_QUERIES }}
+      SEARCH_LOCATIONS:     ${{ vars.SEARCH_LOCATIONS }}
 
     steps:
       # ── Checkout ──────────────────────────────────────────────────────────
