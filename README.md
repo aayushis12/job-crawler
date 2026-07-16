@@ -1,147 +1,229 @@
-# 🎯 Automated Job Crawler
+# 🎯 AI Job Crawler
 
-Runs every weekday at **7:00 AM PST** via GitHub Actions.
+A fully automated daily job crawler that finds senior ML/AI roles, scores them against your resume using an LLM, generates tailored application documents, and delivers a curated digest to your inbox — all for free.
 
-**Pipeline:**
-```
-7:00 AM → Crawl 100+ job sources → Keyword + experience filter
-        → Claude match scoring → Keep ≥85% matches
-        → Generate tailored resume + cover letter (Claude)
-        → Log to Notion → Email digest to you
-```
-
-**Sources:** LinkedIn · Indeed · Glassdoor · ZipRecruiter · Greenhouse ATS · Lever ATS · RemoteOK · We Work Remotely
-
-**Experience filter:** 7+ YOE required (5+ for Tier-1 AI companies like OpenAI, Anthropic, Google, Meta, etc.)
+**Runs on GitHub Actions every weekday at 7 AM PST. Zero infrastructure. Zero cost.**
 
 ---
 
-## Setup (one-time, ~15 minutes)
+## What It Does
 
-### 1. Create a private GitHub repo
+1. **Crawls** 10+ job sources: LinkedIn, Indeed, Greenhouse ATS, Lever ATS, Ashby ATS, Workable, RemoteOK, We Work Remotely, Remotive, and Jobicy
+2. **Filters** by title keywords, seniority (7+ YOE), and visa sponsorship for international roles
+3. **Scores** each job 0–100 against your resume using Groq's free LLM API (batched to stay within free tier limits)
+4. **Generates** a tailored resume and cover letter for every match above your threshold
+5. **Emails** an HTML digest with the top matches, scores, and application links
+6. **Logs** every match to a Notion database for tracking
 
-Go to github.com → New repository → set it **private** → push this entire folder to it.
+---
 
-```bash
-git init
-git add .
-git commit -m "initial"
-git remote add origin https://github.com/YOUR_USERNAME/job-crawler.git
-git push -u origin main
+## Architecture
+
+```
+GitHub Actions (cron: 7am PST, Mon–Fri)
+        │
+        ├── crawl_jobs.py
+        │     ├── jobspy        → LinkedIn, Indeed (US + Remote + India + International)
+        │     ├── Greenhouse    → 40+ AI/tech company boards
+        │     ├── Lever         → 10+ company boards
+        │     ├── Ashby         → 30+ company boards
+        │     ├── Workable      → selected companies
+        │     ├── RemoteOK      → ML/AI tags
+        │     ├── We Work Remotely → programming feed
+        │     ├── Remotive      → software-dev, data categories
+        │     ├── Jobicy        → engineering RSS
+        │     └── Custom pages  → Automattic, Basecamp/37signals
+        │
+        ├── score_jobs.py
+        │     ├── Stage 1: keyword + YOE pre-filter (free)
+        │     └── Stage 2: LLM batch scoring via Groq (5 jobs/call)
+        │
+        ├── generate_docs.py   → tailored resume + cover letter per match
+        ├── notion_tracker.py  → log to Notion database
+        └── email_notify.py    → HTML digest via Gmail SMTP
 ```
 
-### 2. Add GitHub Secrets
+---
 
-Go to your repo → **Settings → Secrets and variables → Actions → New repository secret**
+## Supported Job Sources
 
-Add each of these:
+| Source | Type | Notes |
+|---|---|---|
+| LinkedIn | jobspy | US, Remote, India, International |
+| Indeed | jobspy | US, Remote |
+| Greenhouse | ATS API | 40+ companies |
+| Lever | ATS API | 10+ companies |
+| Ashby | ATS API | 30+ companies |
+| Workable | ATS API | selected companies |
+| RemoteOK | JSON API | ML/AI tags |
+| We Work Remotely | RSS | programming jobs |
+| Remotive | JSON API | software-dev, data |
+| Jobicy | RSS | engineering roles |
+| Automattic | Custom API | fully remote |
+| Basecamp/37signals | Custom JSON | remote-first |
 
-| Secret name | Value |
+---
+
+## Quick Start (Fork & Run)
+
+### 1. Fork this repo
+
+Click **Fork** → keep it private if you prefer.
+
+### 2. Set up Secrets
+
+Go to **Settings → Secrets and variables → Secrets** and add:
+
+| Secret | Description |
 |---|---|
-| `RESUME_TEXT` | Your full resume as plain text (copy-paste from Word/Google Docs) |
-| `ANTHROPIC_API_KEY` | From console.anthropic.com → API Keys |
-| `GMAIL_USER` | Your Gmail address (e.g. `you@gmail.com`) |
-| `GMAIL_APP_PASSWORD` | 16-char App Password — see step 3 |
-| `NOTIFICATION_EMAIL` | Where to receive the digest (can be same as GMAIL_USER) |
-| `NOTION_API_KEY` | From notion.so/my-integrations — see step 4 |
-| `NOTION_DATABASE_ID` | From your Notion database URL — see step 4 |
+| `RESUME_TEXT` | Your full resume as plain text |
+| `LLAMA_API_KEY` | Groq API key — free at [console.groq.com](https://console.groq.com) |
+| `GMAIL_USER` | Your Gmail address |
+| `GMAIL_APP_PASSWORD` | Gmail App Password — [generate here](https://myaccount.google.com/apppasswords) |
+| `NOTIFICATION_EMAIL` | Email address to receive the daily digest |
+| `NOTION_API_KEY` | *(optional)* Notion integration token |
+| `NOTION_DATABASE_ID` | *(optional)* Notion database ID |
 
-### 3. Get a Gmail App Password
+### 3. Set up Variables (optional overrides)
 
-> Required because Google blocks plain-password SMTP. Takes 2 minutes.
+Go to **Settings → Secrets and variables → Variables** to customize without editing code:
 
-1. Go to **myaccount.google.com/security**
-2. Turn on **2-Step Verification** (if not already on)
-3. Search "App passwords" in the search bar
-4. Create a new app password → name it "Job Crawler"
-5. Copy the 16-character password → paste as `GMAIL_APP_PASSWORD` secret
+| Variable | Example value | Description |
+|---|---|---|
+| `SEARCH_QUERIES` | `Staff ML Engineer,LLM Engineer,Applied AI Engineer` | Comma-separated search terms |
+| `SEARCH_LOCATIONS` | `Remote,United States,Bangalore India` | Comma-separated locations |
 
-### 4. Set up Notion
+Leave blank to use the defaults in `config.py`.
 
-#### 4a. Create a Notion Integration
-1. Go to **notion.so/my-integrations** → New integration
-2. Name it "Job Crawler", choose your workspace
-3. Copy the **Internal Integration Token** → paste as `NOTION_API_KEY`
+### 4. Run it
 
-#### 4b. Create the Notion Database
-
-Create a new **full-page database** in Notion with these properties:
-
-| Property name | Type |
-|---|---|
-| Job Title | Title |
-| Company | Text |
-| Location | Text |
-| Match Score | Number |
-| Application URL | URL |
-| Status | Select (options: New, Reviewing, Applied, Rejected, Interviewing, Offer) |
-| Date Found | Date |
-| Source | Select |
-| Type | Select |
-| Tier-1 Company | Checkbox |
-
-#### 4c. Connect your integration to the database
-1. Open your database in Notion
-2. Click **•••** (top right) → **Connections** → add "Job Crawler"
-3. Copy the database ID from the URL:
-   `notion.so/YOUR_WORKSPACE/**DATABASE_ID_HERE**?v=...`
-4. Paste as `NOTION_DATABASE_ID` secret
-
-### 5. Customize your search (optional)
-
-Edit `scripts/config.py` to tune:
-- `SEARCH_QUERIES` — job titles to search
-- `TARGET_ROLE_KEYWORDS` — keywords to match in titles
-- `EXCLUDE_KEYWORDS` — roles to skip
-- `GREENHOUSE_COMPANIES` / `LEVER_COMPANIES` — add/remove ATS companies
-- `MIN_MATCH_SCORE` — raise to 90 for stricter filtering
-- `TIER_1_AI_COMPANIES` — add companies where 5+ YOE is acceptable
-
-### 6. Test it
-
-Trigger a manual run:
-- Go to your repo → **Actions** tab → **Daily Job Crawler** → **Run workflow** → **Run workflow**
-
-Check the run logs and look for the email + Notion entries.
+Go to **Actions → Daily Job Crawler → Run workflow** to trigger manually, or wait for the 7 AM PST weekday schedule.
 
 ---
 
-## Running locally (for testing)
+## Configuration
 
-```bash
-# Create a .env file (never commit this)
-cat > .env << 'EOF'
-RESUME_TEXT="..."
-ANTHROPIC_API_KEY=sk-ant-...
-GMAIL_USER=you@gmail.com
-GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
-NOTIFICATION_EMAIL=you@gmail.com
-NOTION_API_KEY=secret_...
-NOTION_DATABASE_ID=...
-EOF
+Edit `scripts/config.py` to customize:
 
-cd scripts
-pip install -r ../requirements.txt
-python -c "from dotenv import load_dotenv; load_dotenv('../.env')" && python main.py
+```python
+YEARS_OF_EXPERIENCE = 10      # your experience level
+MIN_MATCH_SCORE     = 85      # minimum LLM score to appear in email (0-100)
+MAX_JOBS_IN_EMAIL   = 10      # cap on daily digest size
+MIN_YOE_GENERAL     = 7       # filter out jobs requiring fewer YOE (general companies)
+MIN_YOE_TIER1       = 5       # relaxed floor for top AI labs
+
+# Add/remove target role keywords (case-insensitive)
+TARGET_ROLE_KEYWORDS = ["llm", "applied ai", "agentic", ...]
+
+# Add companies to each ATS crawler
+GREENHOUSE_COMPANIES = ["anthropic", "openai", "databricks", ...]
+LEVER_COMPANIES      = ["mistral", "duckduckgo", ...]
+ASHBY_COMPANIES      = ["perplexity", "cognition", ...]
 ```
 
 ---
 
-## Cost estimate
+## Notion Setup (optional)
 
-Per run (weekday):
-- ~30 Claude scoring calls @ ~800 tokens each ≈ 24K tokens input
-- ~10 resume + cover letter generations @ ~2K tokens each ≈ 20K tokens output
-- **Total: ~$0.15–0.40/day** at Claude Opus pricing (adjust model in `score_jobs.py` to `claude-haiku-4-5` for ~10× cheaper scoring)
+Create a Notion database with these exact property names:
+
+| Property | Type |
+|---|---|
+| `Job Title` | Title |
+| `Company` | Text |
+| `Location` | Text |
+| `Match Score` | Number |
+| `Application URL` | URL |
+| `Status` | Select (`New`, `Applied`, `Interview`, `Offer`, `Rejected`) |
+| `Date Found` | Date |
+| `Source` | Select |
+| `Type` | Select |
+| `Tier-1 Company` | Checkbox |
+
+[Create a Notion integration](https://www.notion.so/my-integrations), connect it to your database, then add the token and database ID as secrets.
 
 ---
 
-## Troubleshooting
+## Token Usage (Groq Free Tier)
 
-**No jobs found:** LinkedIn sometimes blocks GitHub Actions IPs. The Greenhouse/Lever/RemoteOK sources will still work. Consider using a residential proxy or SerpAPI for LinkedIn.
+The free tier gives **500k tokens/day** on `llama-3.1-8b-instant`.
 
-**Gmail "Authentication failed":** Make sure you used an App Password, not your regular password. Also check that 2FA is enabled on the account.
+Typical daily run:
+- ~100 jobs pass keyword filter
+- Scored in batches of 5 → ~20 API calls
+- ~2k tokens per batch → ~40k tokens for scoring
+- ~5k tokens for document generation
+- **Total: ~45–50k tokens/day** — well within the 500k free limit
 
-**Notion "object_not_found":** Double-check that the integration is connected to your database (step 4c).
+---
 
-**Cron not firing:** GitHub Actions cron can be delayed 15–30 min during peak times. Use `workflow_dispatch` to trigger manually.
+## Gmail App Password
+
+1. Go to [myaccount.google.com/security](https://myaccount.google.com/security) and enable 2-Step Verification
+2. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+3. Create a new app password → name it anything (e.g. "Job Crawler")
+4. Copy the 16-character password → add as the `GMAIL_APP_PASSWORD` secret
+
+---
+
+## Project Structure
+
+```
+job-crawler/
+├── .github/
+│   └── workflows/
+│       └── job_crawler.yml   # schedule, secrets, variables
+├── scripts/
+│   ├── config.py             # all tunable parameters
+│   ├── crawl_jobs.py         # all job source crawlers
+│   ├── score_jobs.py         # keyword filter + LLM batch scoring
+│   ├── generate_docs.py      # tailored resume + cover letter
+│   ├── notion_tracker.py     # Notion logging
+│   ├── email_notify.py       # HTML email digest
+│   └── main.py               # pipeline orchestrator
+├── output/                   # run artifacts (gitignored)
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## Contributing
+
+PRs welcome! Ideas:
+
+- Add more ATS integrations (Rippling, Workday, SmartRecruiters)
+- Slack / Discord / Telegram notification support
+- Resume parsing from PDF instead of plain text
+- Parallel jobspy calls to cut crawl time
+- Company culture scoring (Glassdoor ratings, etc.)
+
+---
+
+## How It Works — Technical Deep Dive
+
+### The Problem
+
+Job searching at a senior level is noisy. Most platforms surface hundreds of irrelevant postings — contract roles, entry-level positions, companies you'd never work for. Manual searching is repetitive and exhausting.
+
+### Why GitHub Actions?
+
+Free compute, zero infrastructure, built-in cron scheduling, secret management, and artifact storage. Public repos get unlimited Actions minutes; the whole pipeline runs comfortably within the 120-minute timeout.
+
+### Why ATS APIs Directly?
+
+LinkedIn blocks cloud IPs at scale, and scrapers are fragile. But most companies post jobs through ATS platforms (Greenhouse, Lever, Ashby) that expose **public JSON APIs** with no authentication. A single call to `boards-api.greenhouse.io/v1/boards/anthropic/jobs` returns every open role at Anthropic — fast, reliable, and geographically complete (India, US, Remote all in one response).
+
+### Why Batch LLM Scoring?
+
+Groq's free tier gives 500k tokens/day, but naively scoring 100 jobs one-by-one burns through it fast (each call re-sends your full resume). Batching 5 jobs per API call sends the resume once for five descriptions, reducing token usage by ~60%.
+
+### The Scoring Prompt
+
+Each batch prompt sends a 2,000-char resume summary and up to 5 job descriptions (1,000 chars each), asking the model for a 0–100 score, match reasons, gaps, and a one-line summary in a JSON array. The structured output makes parsing deterministic.
+
+---
+
+## License
+
+MIT
